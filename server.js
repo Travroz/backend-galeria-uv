@@ -7,7 +7,7 @@ const { createClient } = require("@supabase/supabase-js");
 // 1. CONFIGURACIÓN DE SEGURIDAD Y NUBE
 const PASSWORD_ADMIN = "adminuv2026";
 const SECRET_KEY = "uv_secreto_super_seguro";
-const SUPABASE_URL = "https://ndhrggmljybtepzmywhd.supabase.co/rest/v1/"; // Pega tu URL aquí
+const SUPABASE_URL = "https://ndhrggmljybtepzmywhd.supabase.co/"; // Pega tu URL aquí
 const SUPABASE_KEY = "sb_publishable_wihRnD1JCwjBYtLP8IkoUg_QV7APTmr"; // Pega tu API Key (anon public) aquí
 
 // Inicializamos Supabase
