@@ -7,17 +7,20 @@ const { createClient } = require("@supabase/supabase-js");
 // 1. CONFIGURACIÓN DE SEGURIDAD Y NUBE
 const PASSWORD_ADMIN = "adminuv2026";
 const SECRET_KEY = "uv_secreto_super_seguro";
-const SUPABASE_URL = "https://ndhrggmljybtepzmywhd.supabase.co/"; // Pega tu URL aquí
-const SUPABASE_KEY = "sb_publishable_wihRnD1JCwjBYtLP8IkoUg_QV7APTmr"; // Pega tu API Key (anon public) aquí
+const SUPABASE_URL = "https://ndhrggmljybtepzmywhd.supabase.co/"; // URL con doble gg
+const SUPABASE_KEY = "sb_publishable_wihRnD1JCwjBYtLP8IkoUg_QV7APTmr";
 
 // Inicializamos Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const app = express();
 app.use(cors());
-app.use(express.json());
 
-// 2. CONFIGURACIÓN DE MULTER (Ahora guarda en memoria temporal, no en disco duro)
+// --- LÍMITES AMPLIADOS PARA ARCHIVOS 3D PESADOS ---
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// 2. CONFIGURACIÓN DE MULTER
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -59,15 +62,23 @@ app.post(
   verificarToken,
   upload.single("archivo3d"),
   async (req, res) => {
-    const { titulo, descripcion, categoria } = req.body;
+    // A. Extraemos todos los campos, incluyendo los nuevos
+    const {
+      titulo,
+      descripcion,
+      categoria,
+      autor,
+      anofabricacion,
+      anollegada,
+    } = req.body;
     const archivoFisico = req.file;
 
-    // A. Subir el archivo .glb al "Disco Duro" de Supabase (Bucket 'modelos')
+    // B. Subir el archivo .glb a Supabase Storage
     const nombreUnico = `${Date.now()}-${Math.round(Math.random() * 1e9)}.glb`;
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("modelos")
       .upload(nombreUnico, archivoFisico.buffer, {
-        contentType: "model/gltf-binary",
+        contentType: "application/octet-stream", // Usamos octet-stream para evitar rechazos de MIME
         upsert: false,
       });
 
@@ -76,10 +87,20 @@ app.post(
         .status(500)
         .json({ error: "Error subiendo archivo 3D: " + uploadError.message });
 
-    // B. Guardar los textos en la "Tabla" de Supabase
+    // C. Guardar los textos y los nuevos campos en la Tabla
     const { data, error } = await supabase
       .from("modelos")
-      .insert([{ titulo, descripcion, categoria, archivo: nombreUnico }])
+      .insert([
+        {
+          titulo,
+          descripcion,
+          categoria,
+          autor,
+          anofabricacion,
+          anollegada,
+          archivo: nombreUnico,
+        },
+      ])
       .select();
 
     if (error) return res.status(500).json({ error: error.message });
@@ -93,7 +114,15 @@ app.put(
   verificarToken,
   upload.single("archivo3d"),
   async (req, res) => {
-    const { titulo, descripcion, categoria } = req.body;
+    // A. Extraemos todos los campos también en la edición
+    const {
+      titulo,
+      descripcion,
+      categoria,
+      autor,
+      anofabricacion,
+      anollegada,
+    } = req.body;
     const id = req.params.id;
     let nombreArchivo = null;
 
@@ -103,15 +132,22 @@ app.put(
       const { error: uploadError } = await supabase.storage
         .from("modelos")
         .upload(nombreArchivo, req.file.buffer, {
-          contentType: "model/gltf-binary",
+          contentType: "application/octet-stream",
         });
 
       if (uploadError)
         return res.status(500).json({ error: uploadError.message });
     }
 
-    // Preparar qué datos vamos a actualizar en la tabla
-    const datosActualizar = { titulo, descripcion, categoria };
+    // Preparar qué datos vamos a actualizar, incluyendo los nuevos
+    const datosActualizar = {
+      titulo,
+      descripcion,
+      categoria,
+      autor,
+      anofabricacion,
+      anollegada,
+    };
     if (nombreArchivo) datosActualizar.archivo = nombreArchivo;
 
     const { data, error } = await supabase
@@ -129,7 +165,6 @@ app.put(
 app.delete("/api/modelos/:id", verificarToken, async (req, res) => {
   const id = req.params.id;
 
-  // Primero buscamos el nombre del archivo para borrarlo del disco duro virtual
   const { data: modelo } = await supabase
     .from("modelos")
     .select("archivo")
@@ -140,7 +175,6 @@ app.delete("/api/modelos/:id", verificarToken, async (req, res) => {
     await supabase.storage.from("modelos").remove([modelo.archivo]);
   }
 
-  // Luego borramos el registro de la tabla
   const { error } = await supabase.from("modelos").delete().eq("id", id);
 
   if (error) return res.status(500).json({ error: error.message });
